@@ -174,7 +174,7 @@ static inline void uart_stm32_set_baudrate(const struct device *dev, uint32_t ba
 #endif /* HAS_LPUART_1 */
 #ifdef USART_CR1_OVER8
 		LL_USART_SetOverSampling(config->usart,
-					 LL_USART_OVERSAMPLING_16);
+					 LL_USART_OVERSAMPLING_8);
 #endif
 		LL_USART_SetBaudRate(config->usart,
 				     clock_rate,
@@ -182,7 +182,7 @@ static inline void uart_stm32_set_baudrate(const struct device *dev, uint32_t ba
 				     LL_USART_PRESCALER_DIV1,
 #endif
 #ifdef USART_CR1_OVER8
-				     LL_USART_OVERSAMPLING_16,
+				     LL_USART_OVERSAMPLING_8,
 #endif
 				     baud_rate);
 		/* Check BRR is greater than or equal to 16d */

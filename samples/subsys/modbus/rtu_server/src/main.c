@@ -17,6 +17,8 @@ LOG_MODULE_REGISTER(mbs_sample, LOG_LEVEL_INF);
 static uint16_t holding_reg[8];
 static uint8_t coils_state;
 
+struct gpio_dt_spec gpiotoggle = GPIO_DT_SPEC_GET(DT_ALIAS(led3), gpios);
+
 static const struct gpio_dt_spec led_dev[] = {
 	GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios),
 	GPIO_DT_SPEC_GET(DT_ALIAS(led1), gpios),
@@ -93,8 +95,8 @@ static int holding_reg_wr(uint16_t addr, uint16_t reg)
 static struct modbus_user_callbacks mbs_cbs = {
 	.coil_rd = coil_rd,
 	.coil_wr = coil_wr,
-	.holding_reg_rd = holding_reg_rd,
-	.holding_reg_wr = holding_reg_wr,
+	// .holding_reg_rd = holding_reg_rd,
+	// .holding_reg_wr = holding_reg_wr,
 };
 
 const static struct modbus_iface_param server_param = {
@@ -104,7 +106,7 @@ const static struct modbus_iface_param server_param = {
 		.unit_id = 1,
 	},
 	.serial = {
-		.baud = 19200,
+		.baud = 21250000,
 		.parity = UART_CFG_PARITY_NONE,
 	},
 };
@@ -137,6 +139,12 @@ void main(void)
 		}
 
 		err = gpio_pin_configure_dt(&led_dev[i], GPIO_OUTPUT_INACTIVE);
+		if (err != 0) {
+			LOG_ERR("Failed to configure LED%u pin", i);
+			return;
+		}
+
+		err = gpio_pin_configure_dt(&gpiotoggle, GPIO_OUTPUT_ACTIVE);
 		if (err != 0) {
 			LOG_ERR("Failed to configure LED%u pin", i);
 			return;
