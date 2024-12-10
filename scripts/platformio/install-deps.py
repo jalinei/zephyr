@@ -182,8 +182,19 @@ def load_west_manifest(manifest_path):
             sys.stderr.write(str(exc) + "\n")
             sys.exit(1)
 
+def load_state_json(state_path):
+    with open(state_path, encoding="utf8") as fp:
+        return json.load(fp)
 
-def process_bundled_projects(platform_name, packages_folder, west_manifest):
+def clear_deprecated_package(path, packages_folder):
+    deprecated_pkg_path = os.path.join(packages_folder, path)
+    if os.path.isdir(deprecated_pkg_path):
+        shutil.rmtree(deprecated_pkg_path)
+    else:
+        print("Package path not found")
+
+def process_bundled_projects(platform_name, packages_folder, west_manifest,
+                             state_manifest = None):
     assert (
         "projects" in west_manifest
     ), "Missing the `projects` field in the package manifest!"
@@ -191,6 +202,28 @@ def process_bundled_projects(platform_name, packages_folder, west_manifest):
     # Create a folder for extra packages from west.yml
     if not os.path.isdir(packages_folder):
         os.makedirs(packages_folder)
+
+    # If there is a state.json manifest, compare it with west.yml
+    if state_manifest:
+        # Convert west.yml data into a dictionary for easier comparison
+        west_dep = {proj['name']: proj for proj in west_manifest['manifest']['projects']}
+        modified = []
+
+        # Check for modified entries
+        for name, state_hash in state_manifest.items():
+            if name in west_dep:
+                west_revision = west_dep[name].get('revision')
+                if state_hash != west_revision:
+                    modified.append({
+                        'name': name,
+                        'state_hash': state_hash,
+                        'west_revision': west_revision,
+                        'path': west_dep[name].get('path')
+                    })
+    # If deprecated dependency found, clear its folder to download correct version
+    if modified:
+        for deprecated_entries in modified:
+            clear_deprecated_package(deprecated_entries['path'], package_path)
 
     default_remote = west_manifest.get("defaults", {}).get("remote", "")
     remotes = {remote["name"]: remote for remote in west_manifest["remotes"]}
@@ -233,7 +266,7 @@ def save_state(dst_file, state_data):
         json.dump(state_data, fp, indent=2)
 
 
-def main(platform_name, secondary_installation):
+def main(platform_name, secondary_installation, manifest_path):
     framework_dir = os.path.realpath(
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
@@ -252,10 +285,14 @@ def main(platform_name, secondary_installation):
         )
         sys.exit(1)
 
-    west_manifest = load_west_manifest(os.path.join(framework_dir, "west.yml"))
+    west_manifest = load_west_manifest(manifest_path)
+    if os.path.isfile(state_file):
+        state_manifest = load_state_json(state_file)
+    else:
+        state_manifest = None
 
     result, state = process_bundled_projects(
-        platform_name, packages_folder, west_manifest
+        platform_name, packages_folder, west_manifest, state_manifest
     )
     if result and state:
         save_state(state_file, state)
@@ -279,9 +316,17 @@ if __name__ == "__main__":
         action="store_true",
         help="Ignore the state file while checking Zephyr project dependencies",
     )
+    parser.add_argument(
+        "--manifest",
+        type=str,
+        default=os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "..", "west.yml"
+        ),
+        help="Path to the west.yml manifest file",
+    )
     cargs = parser.parse_args()
     try:
-        main(cargs.platform, cargs.secondary_installation)
+        main(cargs.platform, cargs.secondary_installation, cargs.manifest)
     except Exception as e:
         sys.stderr.write(
             "Error: Unknown exception occured. Failed to install bundled projects!\n"
