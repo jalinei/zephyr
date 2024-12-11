@@ -206,9 +206,8 @@ def process_bundled_projects(platform_name, packages_folder, west_manifest,
     # If there is a state.json manifest, compare it with west.yml
     if state_manifest:
         # Convert west.yml data into a dictionary for easier comparison
-        west_dep = {proj['name']: proj for proj in west_manifest['manifest']['projects']}
+        west_dep = {proj['name']: proj for proj in west_manifest['projects']}
         modified = []
-
         # Check for modified entries
         for name, state_hash in state_manifest.items():
             if name in west_dep:
@@ -220,10 +219,11 @@ def process_bundled_projects(platform_name, packages_folder, west_manifest,
                         'west_revision': west_revision,
                         'path': west_dep[name].get('path')
                     })
-    # If deprecated dependency found, clear its folder to download correct version
-    if modified:
+        # If deprecated dependency found, clear its folder to download correct version
         for deprecated_entries in modified:
-            clear_deprecated_package(deprecated_entries['path'], package_path)
+            print(f"Package {deprecated_entries['name']} version differs from west.yml..\n\
+                    Upgrading to {deprecated_entries['west_revision']}\n")
+            clear_deprecated_package(deprecated_entries['path'], packages_folder)
 
     default_remote = west_manifest.get("defaults", {}).get("remote", "")
     remotes = {remote["name"]: remote for remote in west_manifest["remotes"]}
@@ -285,7 +285,7 @@ def main(platform_name, secondary_installation, manifest_path):
         )
         sys.exit(1)
 
-    west_manifest = load_west_manifest(manifest_path)
+    west_manifest = load_west_manifest(os.path.realpath(manifest_path))
     if os.path.isfile(state_file):
         state_manifest = load_state_json(state_file)
     else:
