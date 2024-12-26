@@ -182,19 +182,23 @@ def load_west_manifest(manifest_path):
             sys.stderr.write(str(exc) + "\n")
             sys.exit(1)
 
+
 def load_state_json(state_path):
     with open(state_path, encoding="utf8") as fp:
         return json.load(fp)
 
+
 def clear_deprecated_package(path, packages_folder):
     deprecated_pkg_path = os.path.join(packages_folder, path)
     if os.path.isdir(deprecated_pkg_path):
-        shutil.rmtree(deprecated_pkg_path)
+        clean_up(deprecated_pkg_path)
     else:
         print("Package path not found")
 
-def process_bundled_projects(platform_name, packages_folder, west_manifest,
-                             state_manifest = None):
+
+def process_bundled_projects(
+    platform_name, packages_folder, west_manifest, state_manifest=None
+):
     assert (
         "projects" in west_manifest
     ), "Missing the `projects` field in the package manifest!"
@@ -206,24 +210,24 @@ def process_bundled_projects(platform_name, packages_folder, west_manifest,
     # If there is a state.json manifest, compare it with west.yml
     if state_manifest:
         # Convert west.yml data into a dictionary for easier comparison
-        west_dep = {proj['name']: proj for proj in west_manifest['projects']}
-        modified = []
-        # Check for modified entries
-        for name, state_hash in state_manifest.items():
-            if name in west_dep:
-                west_revision = west_dep[name].get('revision')
-                if state_hash != west_revision:
-                    modified.append({
-                        'name': name,
-                        'state_hash': state_hash,
-                        'west_revision': west_revision,
-                        'path': west_dep[name].get('path')
-                    })
-        # If deprecated dependency found, clear its folder to download correct version
-        for deprecated_entries in modified:
-            print(f"Package {deprecated_entries['name']} version differs from west.yml..\n\
-                    Upgrading to {deprecated_entries['west_revision']}\n")
-            clear_deprecated_package(deprecated_entries['path'], packages_folder)
+        west_dep = {proj["name"]: proj for proj in west_manifest["projects"]}
+        modified_projects = [
+            {
+                "name": name,
+                "state_hash": state_hash,
+                "west_revision": west_dep[name].get("revision"),
+                "path": west_dep[name].get("path"),
+            }
+            for name, state_hash in state_manifest.items()
+            if name in west_dep and state_hash != west_dep[name].get("revision")
+        ]
+
+        for project in modified_projects:
+            print(
+                f"The version of the `{project['name']}` package changed, "
+                f"upgrading to `{project['west_revision']}`."
+            )
+            clear_deprecated_package(project["path"], packages_folder)
 
     default_remote = west_manifest.get("defaults", {}).get("remote", "")
     remotes = {remote["name"]: remote for remote in west_manifest["remotes"]}
@@ -285,6 +289,9 @@ def main(platform_name, secondary_installation, manifest_path):
         )
         sys.exit(1)
 
+    if not manifest_path:
+        manifest_path = os.path.join(framework_dir, "west.yml")
+
     west_manifest = load_west_manifest(os.path.realpath(manifest_path))
     if os.path.isfile(state_file):
         state_manifest = load_state_json(state_file)
@@ -319,9 +326,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--manifest",
         type=str,
-        default=os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "..", "..", "west.yml"
-        ),
         help="Path to the west.yml manifest file",
     )
     cargs = parser.parse_args()
